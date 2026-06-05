@@ -1,4 +1,3 @@
-json
 {
   "$schema": "https://schema.railpack.com",
   "provider": "python",
