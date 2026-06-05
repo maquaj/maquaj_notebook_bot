@@ -1,5 +1,5 @@
 ﻿import telebot
-from config import TOKEN
+from config import TELEGRAM_TOKEN
 from database import init_db, get_connection
 from utils import parse_datetime, extract_reminder_text
 from datetime import datetime
@@ -10,7 +10,7 @@ import birthdays
 import todo
 
 # Инициализация
-bot = telebot.TeleBot(TOKEN)
+bot = telebot.TeleBot(TELEGRAM_TOKEN)
 init_db()
 
 # Регистрируем обработчики из модулей
