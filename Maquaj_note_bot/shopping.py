@@ -67,9 +67,25 @@ def format_shopping_list(list_id, name, items_json, date):
     
     return message, keyboard
 
+def show_shopping_lists(message):
+    """Показывает списки покупок (вызывается из bot.py для команд и меню)"""
+    lists = get_shopping_lists(message.chat.id)
+    if not lists:
+        # Импортируем bot глобально или используем переданный
+        from bot import bot
+        bot.reply_to(message, "🛒 Нет списков покупок.\nСоздайте: *купить: хлеб, молоко*", parse_mode='Markdown')
+        return
+    
+    from bot import bot
+    for list_id, name, items, date in lists:
+        msg, keyboard = format_shopping_list(list_id, name, items, date)
+        bot.send_message(message.chat.id, msg, parse_mode='Markdown', reply_markup=keyboard)
+
 def register_handlers(bot):
-    @bot.message_handler(commands=['shopping'])
-    def show_shopping_lists(message):
+    
+    @bot.message_handler(commands=['shopping', 'покупки'])
+    def show_shopping_lists_command(message):
+        """Показывает списки покупок по команде"""
         lists = get_shopping_lists(message.chat.id)
         if not lists:
             bot.reply_to(message, "🛒 Нет списков покупок.\nСоздайте: *купить: хлеб, молоко*", parse_mode='Markdown')
