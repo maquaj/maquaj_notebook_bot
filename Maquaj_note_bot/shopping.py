@@ -15,11 +15,14 @@ def create_shopping_list(user_id, text):
     
     items = [{"name": item, "checked": False} for item in items_raw]
     
+    # Сохраняем первую покупку как название списка
+    list_name = items_raw[0] if items_raw else "покупки"
+    
     query = '''
         INSERT INTO shopping_lists (user_id, name, items, date) 
         VALUES (%s, %s, %s, %s)
     '''
-    execute_query(query, (user_id, raw[:50], json.dumps(items, ensure_ascii=False), datetime.now().strftime("%Y-%m-%d %H:%M")))
+    execute_query(query, (user_id, list_name, json.dumps(items, ensure_ascii=False), datetime.now().strftime("%Y-%m-%d %H:%M")))
     return True
 
 def get_shopping_lists(user_id):
@@ -46,7 +49,7 @@ def delete_shopping_list(list_id, user_id):
     return True
 
 def format_all_shopping_lists(user_id):
-    """Форматирует ВСЕ списки покупок в ОДНОМ сообщении (упрощённо)"""
+    """Форматирует ВСЕ списки покупок в ОДНОМ сообщении (без дублирования)"""
     lists = get_shopping_lists(user_id)
     if not lists:
         return None, None
@@ -59,26 +62,23 @@ def format_all_shopping_lists(user_id):
         checked_count = sum(1 for i in items if i["checked"])
         total_count = len(items)
         
-        # Заголовок списка (только название)
-        message += f"📋 *{name}*\n"
-        
-        # Пункты списка с галочками
+        # Просто список покупок без лишних заголовков
         for i, item in enumerate(items):
             check = "✅" if item["checked"] else "⬜"
             message += f"{check} {item['name']}\n"
-            # Кнопка с дублированием названия
             btn_text = f"{'🔄' if item['checked'] else '✅'} {item['name']}"
             keyboard.add(telebot.types.InlineKeyboardButton(
                 btn_text, callback_data=f"shop_toggle_{list_id}_{i}"
             ))
         
-        # Статистика и дата (компактно)
-        message += f"📊 {checked_count}/{total_count}\n"
+        # Статистика компактно
+        if total_count > 1:
+            message += f"📊 {checked_count}/{total_count}\n"
         message += "─" * 15 + "\n"
         
         # Кнопка удаления списка
         keyboard.add(telebot.types.InlineKeyboardButton(
-            f"🗑 Удалить \"{name}\"", callback_data=f"shop_del_{list_id}"
+            f"🗑 Удалить список", callback_data=f"shop_del_{list_id}"
         ))
         keyboard.row()
     
