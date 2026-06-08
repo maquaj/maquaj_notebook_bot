@@ -59,14 +59,11 @@ def menu_notes(message):
 
 @bot.message_handler(func=lambda m: m.text and m.text == '🛒 Покупки')
 def menu_shopping(message):
-    lists = shopping.get_shopping_lists(message.chat.id)
-    if not lists:
+    msg, keyboard = shopping.format_all_shopping_lists(message.chat.id)
+    if msg is None:
         bot.reply_to(message, "🛒 Нет списков покупок.\nСоздайте: *купить: хлеб, молоко*", parse_mode='Markdown')
         return
-    
-    for list_id, name, items, date in lists:
-        msg, keyboard = shopping.format_shopping_list(list_id, name, items, date)
-        bot.send_message(message.chat.id, msg, parse_mode='Markdown', reply_markup=keyboard)
+    bot.send_message(message.chat.id, msg, parse_mode='Markdown', reply_markup=keyboard)
 
 @bot.message_handler(func=lambda m: m.text and m.text == '🎂 Дни рождения')
 def menu_birthdays(message):
@@ -103,7 +100,6 @@ def send_welcome(message):
                  "/help — помощь",
                  parse_mode='Markdown')
 
-# Команда помощи
 @bot.message_handler(commands=['help', 'помощь'])
 def show_help(message):
     bot.reply_to(message,
@@ -126,6 +122,9 @@ def handle_all_messages(message):
     text = message.text.strip()
     
     if text.startswith('/'):
+        return
+    
+    if text.lower() == 'меню':
         return
     
     # 1. Дни рождения
@@ -183,7 +182,6 @@ def handle_all_messages(message):
 
 # ========== ОБРАБОТКА КНОПОК ==========
 
-# Удаление напоминания из списка /reminders
 @bot.callback_query_handler(func=lambda call: call.data.startswith('rem_del_'))
 def handle_delete_reminder(call):
     rem_id = int(call.data.split('_')[2])
@@ -191,7 +189,6 @@ def handle_delete_reminder(call):
         bot.answer_callback_query(call.id, "⏰ Напоминание удалено!")
         bot.delete_message(call.message.chat.id, call.message.message_id)
 
-# Кнопка "Я увидел" в напоминании
 @bot.callback_query_handler(func=lambda call: call.data.startswith('rem_ack_'))
 def handle_reminder_ack(call):
     rem_id = int(call.data.split('_')[2])
@@ -209,7 +206,6 @@ def handle_reminder_ack(call):
     
     bot.answer_callback_query(call.id, "👍 Отлично!")
 
-# Кнопка "Добавить задачу" в todo
 @bot.callback_query_handler(func=lambda call: call.data == 'todo_add_prompt')
 def handle_todo_add_prompt(call):
     todo.set_waiting_for_task(call.message.chat.id)
@@ -219,7 +215,6 @@ def handle_todo_add_prompt(call):
                     parse_mode='Markdown')
     bot.answer_callback_query(call.id)
 
-# Обработчик ввода задачи после нажатия кнопки "Добавить задачу"
 @bot.message_handler(func=lambda m: m.text and not m.text.startswith('/') and todo.is_waiting_for_task(m.chat.id))
 def handle_task_input(message):
     task = message.text.strip()
@@ -242,10 +237,8 @@ if __name__ == "__main__":
     print("📝 Просто текст — заметка")
     print("⏳ Задержка 5 секунд перед запуском polling...")
     
-    # Задержка для предотвращения конфликта экземпляров
     time.sleep(5)
     
-    # Сброс вебхука (если был установлен)
     try:
         bot.remove_webhook()
         print("✅ Вебхук удалён")
@@ -254,7 +247,6 @@ if __name__ == "__main__":
     
     print("🚀 Запуск polling...")
     
-    # Бесконечный цикл с переподключением при ошибке
     while True:
         try:
             bot.infinity_polling(skip_pending=True, timeout=60, long_polling_timeout=60)
@@ -262,3 +254,5 @@ if __name__ == "__main__":
             print(f"❌ Ошибка polling: {e}")
             print("🔄 Перезапуск через 10 секунд...")
             time.sleep(10)
+
+print("📦 Модуль bot.py загружен")
