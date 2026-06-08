@@ -239,4 +239,19 @@ if __name__ == "__main__":
     print("📋 сделать задача")
     print("📱 меню — открыть меню")
     print("📝 Просто текст — заметка")
+    import time
+    time.sleep(5)
+    
+    print("🚀 Запуск polling...")
+    try:
+        bot.infinity_polling(skip_pending=True, timeout=60, long_polling_timeout=60)
+    except Exception as e:
+        print(f"❌ Ошибка polling: {e}")
+        time.sleep(10)
+        print("🔄 Перезапуск...")
+try:
+    bot.remove_webhook()
+    print("✅ Вебхук удалён")
+except:
+    pass
     bot.infinity_polling()
