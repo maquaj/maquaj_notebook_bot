@@ -58,19 +58,30 @@ def menu_notes(message):
 
 @bot.message_handler(func=lambda m: m.text and m.text == '🛒 Покупки')
 def menu_shopping(message):
-    shopping.show_shopping_lists(message)
+    lists = shopping.get_shopping_lists(message.chat.id)
+    if not lists:
+        bot.reply_to(message, "🛒 Нет списков покупок.\nСоздайте: *купить: хлеб, молоко*", parse_mode='Markdown')
+        return
+    
+    for list_id, name, items, date in lists:
+        msg, keyboard = shopping.format_shopping_list(list_id, name, items, date)
+        bot.send_message(message.chat.id, msg, parse_mode='Markdown', reply_markup=keyboard)
 
 @bot.message_handler(func=lambda m: m.text and m.text == '🎂 Дни рождения')
 def menu_birthdays(message):
-    birthdays.show_birthdays(message)
+    msg, keyboard = birthdays.get_birthdays_list(message.chat.id)
+    bot.send_message(message.chat.id, msg, parse_mode='Markdown', reply_markup=keyboard)
 
 @bot.message_handler(func=lambda m: m.text and m.text == '⏰ Напоминания')
 def menu_reminders(message):
-    reminders.show_reminders(message)
+    msg, keyboard = reminders.get_reminders_list(message.chat.id)
+    bot.send_message(message.chat.id, msg, parse_mode='Markdown', reply_markup=keyboard)
 
 @bot.message_handler(func=lambda m: m.text and m.text == '📋 Задачи')
 def menu_todo(message):
-    todo.show_todo(message)
+    tasks = todo.get_all_tasks(message.chat.id)
+    msg, keyboard = todo.format_todo_list(tasks)
+    bot.send_message(message.chat.id, msg, parse_mode='Markdown', reply_markup=keyboard)
 
 # ========== ГЛАВНЫЙ ОБРАБОТЧИК ==========
 @bot.message_handler(commands=['start'])
