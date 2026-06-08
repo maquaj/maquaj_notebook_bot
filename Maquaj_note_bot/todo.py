@@ -91,14 +91,14 @@ def format_todo_list(tasks):
         task_display = f"~~{task}~~" if is_done else task
         message += f"{status} {task_display}\n"
         
-        # Кнопки для каждой задачи
+        # Кнопка с названием задачи
         if is_done:
             keyboard.add(telebot.types.InlineKeyboardButton(
-                f"🔄 Вернуть #{task_id}", callback_data=f"todo_toggle_{task_id}"
+                f"🔄 Вернуть: {task[:30]}", callback_data=f"todo_toggle_{task_id}"
             ))
         else:
             keyboard.add(telebot.types.InlineKeyboardButton(
-                f"✅ Выполнить #{task_id}", callback_data=f"todo_toggle_{task_id}"
+                f"✅ Выполнить: {task[:30]}", callback_data=f"todo_toggle_{task_id}"
             ))
     
     # Добавляем кнопки управления внизу
