@@ -15,7 +15,6 @@ def create_shopping_list(user_id, text):
     
     items = [{"name": item, "checked": False} for item in items_raw]
     
-    # Сохраняем первую покупку как название списка
     list_name = items_raw[0] if items_raw else "покупки"
     
     query = '''
@@ -49,38 +48,49 @@ def delete_shopping_list(list_id, user_id):
     return True
 
 def format_all_shopping_lists(user_id):
-    """Форматирует ВСЕ списки покупок в ОДНОМ сообщении (без дублирования)"""
+    """Форматирует ВСЕ списки покупок в ОДНОМ сообщении"""
     lists = get_shopping_lists(user_id)
     if not lists:
         return None, None
     
     message = "🛒 *Мои покупки*\n\n"
-    keyboard = telebot.types.InlineKeyboardMarkup(row_width=1)
+    keyboard = telebot.types.InlineKeyboardMarkup(row_width=2)
     
     for list_id, name, items_json, date in lists:
         items = json.loads(items_json)
         checked_count = sum(1 for i in items if i["checked"])
         total_count = len(items)
         
-        # Просто список покупок без лишних заголовков
+        # Отображаем пункты
         for i, item in enumerate(items):
             check = "✅" if item["checked"] else "⬜"
             message += f"{check} {item['name']}\n"
-            btn_text = f"{'🔄' if item['checked'] else '✅'} {item['name']}"
-            keyboard.add(telebot.types.InlineKeyboardButton(
+        
+        # Статистика
+        if total_count > 1:
+            message += f"\n📊 {checked_count}/{total_count}\n"
+        message += "─" * 15 + "\n"
+        
+        # Кнопки для каждого пункта (в одну строку, если помещаются)
+        row_buttons = []
+        for i, item in enumerate(items):
+            btn_text = f"{'✅' if item['checked'] else '⬜'} {item['name'][:15]}"
+            row_buttons.append(telebot.types.InlineKeyboardButton(
                 btn_text, callback_data=f"shop_toggle_{list_id}_{i}"
             ))
         
-        # Статистика компактно
-        if total_count > 1:
-            message += f"📊 {checked_count}/{total_count}\n"
-        message += "─" * 15 + "\n"
+        # Добавляем кнопки пунктов (по 2 в строку)
+        for i in range(0, len(row_buttons), 2):
+            if i + 1 < len(row_buttons):
+                keyboard.row(row_buttons[i], row_buttons[i + 1])
+            else:
+                keyboard.row(row_buttons[i])
         
-        # Кнопка удаления списка
-        keyboard.add(telebot.types.InlineKeyboardButton(
+        # Кнопка удаления всего списка
+        keyboard.row(telebot.types.InlineKeyboardButton(
             f"🗑 Удалить список", callback_data=f"shop_del_{list_id}"
         ))
-        keyboard.row()
+        keyboard.row()  # разделитель между списками
     
     return message, keyboard
 
