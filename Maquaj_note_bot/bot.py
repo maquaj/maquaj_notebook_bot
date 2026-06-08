@@ -8,6 +8,7 @@ import notes
 import shopping
 import birthdays
 import todo
+import time
 
 # Инициализация
 bot = telebot.TeleBot(TOKEN)
@@ -239,19 +240,25 @@ if __name__ == "__main__":
     print("📋 сделать задача")
     print("📱 меню — открыть меню")
     print("📝 Просто текст — заметка")
-    import time
+    print("⏳ Задержка 5 секунд перед запуском polling...")
+    
+    # Задержка для предотвращения конфликта экземпляров
     time.sleep(5)
     
-    print("🚀 Запуск polling...")
+    # Сброс вебхука (если был установлен)
     try:
-        bot.infinity_polling(skip_pending=True, timeout=60, long_polling_timeout=60)
+        bot.remove_webhook()
+        print("✅ Вебхук удалён")
     except Exception as e:
-        print(f"❌ Ошибка polling: {e}")
-        time.sleep(10)
-        print("🔄 Перезапуск...")
-try:
-    bot.remove_webhook()
-    print("✅ Вебхук удалён")
-except:
-    pass
-    bot.infinity_polling()
+        print(f"⚠️ Ошибка удаления вебхука: {e}")
+    
+    print("🚀 Запуск polling...")
+    
+    # Бесконечный цикл с переподключением при ошибке
+    while True:
+        try:
+            bot.infinity_polling(skip_pending=True, timeout=60, long_polling_timeout=60)
+        except Exception as e:
+            print(f"❌ Ошибка polling: {e}")
+            print("🔄 Перезапуск через 10 секунд...")
+            time.sleep(10)
