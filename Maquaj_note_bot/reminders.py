@@ -1,5 +1,5 @@
 import telebot
-from database import get_connection
+from database import execute_query, get_connection, put_connection
 from utils import parse_datetime, extract_reminder_text
 from datetime import datetime
 import threading
@@ -10,67 +10,60 @@ def get_cursor():
     return conn, cursor
 
 def add_reminder(user_id, text, remind_time):
-    conn, cursor = get_connection()
-    cursor.execute('''
+    print(f"📝 Добавление напоминания: '{text}' на {remind_time}")
+    query = '''
         INSERT INTO reminders (user_id, text, remind_time, is_sent, attempts)
-        VALUES (?, ?, ?, 0, 0)
-    ''', (user_id, text, remind_time.isoformat()))
-    conn.commit()
-    reminder_id = cursor.lastrowid
-    print(f"📝 Добавлено напоминание #{reminder_id}: '{text}' на {remind_time.strftime('%d.%m.%Y %H:%M')}")
+        VALUES (%s, %s, %s, 0, 0)
+        RETURNING id
+    '''
+    result = execute_query(query, (user_id, text, remind_time.isoformat()), fetch_one=True)
+    reminder_id = result[0] if result else None
+    print(f"✅ Напоминание #{reminder_id} добавлено")
     return reminder_id
 
 def get_pending_reminders():
-    conn, cursor = get_connection()
     now = datetime.now().isoformat()
-    cursor.execute('''
+    query = '''
         SELECT id, user_id, text, remind_time, attempts 
         FROM reminders 
-        WHERE is_sent = 0 AND remind_time <= ? AND attempts < 3
-    ''', (now,))
-    results = cursor.fetchall()
-    if results:
-        print(f"🔍 Найдено {len(results)} напоминаний для отправки")
-    return results
+        WHERE is_sent = 0 AND remind_time <= %s AND attempts < 3
+    '''
+    result = execute_query(query, (now,), fetch_all=True)
+    return result if result else []
 
 def increment_attempt(reminder_id):
-    conn, cursor = get_connection()
-    cursor.execute('UPDATE reminders SET attempts = attempts + 1 WHERE id = ?', (reminder_id,))
-    conn.commit()
+    query = 'UPDATE reminders SET attempts = attempts + 1 WHERE id = %s'
+    execute_query(query, (reminder_id,))
 
 def mark_reminder_sent(reminder_id):
-    conn, cursor = get_connection()
-    cursor.execute('UPDATE reminders SET is_sent = 1 WHERE id = ?', (reminder_id,))
-    conn.commit()
+    query = 'UPDATE reminders SET is_sent = 1 WHERE id = %s'
+    execute_query(query, (reminder_id,))
 
 def reschedule_failed_reminder(reminder_id):
-    conn, cursor = get_connection()
-    cursor.execute('''
-        UPDATE reminders 
-        SET remind_time = datetime(remind_time, '+10 minutes')
-        WHERE id = ?
-    ''', (reminder_id,))
-    conn.commit()
+    query = 'UPDATE reminders SET remind_time = remind_time + interval \'10 minutes\' WHERE id = %s'
+    execute_query(query, (reminder_id,))
     print(f"⏰ Напоминание #{reminder_id} перенесено на +10 минут")
 
 def delete_reminder(reminder_id, user_id):
-    conn, cursor = get_connection()
-    cursor.execute('DELETE FROM reminders WHERE id = ? AND user_id = ?', (reminder_id, user_id))
-    conn.commit()
-    return cursor.rowcount > 0
+    query = 'DELETE FROM reminders WHERE id = %s AND user_id = %s'
+    execute_query(query, (reminder_id, user_id))
+    return True
 
 def get_all_future_reminders(user_id):
-    conn, cursor = get_connection()
-    cursor.execute('''
+    query = '''
         SELECT id, text, remind_time 
         FROM reminders 
-        WHERE user_id = ? AND is_sent = 0
+        WHERE user_id = %s AND is_sent = 0
         ORDER BY remind_time
-    ''', (user_id,))
-    return cursor.fetchall()
+    '''
+    result = execute_query(query, (user_id,), fetch_all=True)
+    return result if result else []
 
 def format_reminder_time(reminder_time):
-    dt = datetime.fromisoformat(reminder_time)
+    if isinstance(reminder_time, str):
+        dt = datetime.fromisoformat(reminder_time)
+    else:
+        dt = reminder_time
     return dt.strftime("%d.%m.%Y в %H:%M")
 
 def get_reminders_list(user_id):
@@ -130,7 +123,6 @@ def start_reminder_checker(bot):
         
         while True:
             try:
-                # Каждые 30 секунд выводим статус (для отладки)
                 if time.time() - last_debug > 30:
                     print("⏰ Поток напоминаний активен, проверяю...")
                     last_debug = time.time()
@@ -141,8 +133,7 @@ def start_reminder_checker(bot):
                 
                 for rem_id, user_id, text, remind_time, attempts in reminders:
                     try:
-                        dt = datetime.fromisoformat(remind_time)
-                        time_str = dt.strftime("%d.%m.%Y в %H:%M")
+                        time_str = format_reminder_time(remind_time)
                         print(f"🔔 Отправка напоминания #{rem_id} пользователю {user_id}: '{text}' на {time_str}")
                         
                         keyboard = telebot.types.InlineKeyboardMarkup()
@@ -158,7 +149,7 @@ def start_reminder_checker(bot):
                             reply_markup=keyboard)
                         
                         mark_reminder_sent(rem_id)
-                        print(f"✅ Напоминание #{rem_id} отправлено и помечено как отправленное")
+                        print(f"✅ Напоминание #{rem_id} отправлено и помечено")
                         
                     except Exception as e:
                         print(f"❌ Ошибка отправки #{rem_id}, попытка {attempts+1}/3: {e}")
@@ -174,7 +165,6 @@ def start_reminder_checker(bot):
     
     thread = threading.Thread(target=checker, daemon=True)
     thread.start()
-    print("⏰ Поток напоминаний успешно запущен (daemon=True)")
+    print("⏰ Поток напоминаний успешно запущен")
 
-# Для отладки — проверка при импорте
 print("📦 Модуль reminders.py загружен")
