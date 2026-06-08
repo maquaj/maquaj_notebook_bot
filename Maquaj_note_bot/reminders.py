@@ -4,6 +4,11 @@ from utils import parse_datetime, extract_reminder_text
 from datetime import datetime
 import threading
 import time
+import pytz
+from datetime import datetime, timezone
+
+# Установка часового пояса (Москва)
+MOSCOW_TZ = pytz.timezone('Europe/Moscow')
 
 def get_cursor():
     conn, cursor = get_connection()
