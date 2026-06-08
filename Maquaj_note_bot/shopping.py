@@ -19,7 +19,7 @@ def create_shopping_list(user_id, text):
     cursor.execute('''
         INSERT INTO shopping_lists (user_id, name, items, date) 
         VALUES (?, ?, ?, ?)
-    ''', (user_id, raw[:50], json.dumps(items), datetime.now().strftime("%Y-%m-%d %H:%M")))
+    ''', (user_id, raw[:50], json.dumps(items, ensure_ascii=False), datetime.now().strftime("%Y-%m-%d %H:%M")))
     conn.commit()
     return cursor.lastrowid
 
@@ -37,7 +37,7 @@ def update_shopping_item(list_id, user_id, item_index, checked):
         if 0 <= item_index < len(items):
             items[item_index]["checked"] = checked
             cursor.execute('UPDATE shopping_lists SET items = ? WHERE id = ? AND user_id = ?',
-                          (json.dumps(items), list_id, user_id))
+                          (json.dumps(items, ensure_ascii=False), list_id, user_id))
             conn.commit()
             return True
     return False
@@ -48,52 +48,54 @@ def delete_shopping_list(list_id, user_id):
     conn.commit()
     return cursor.rowcount > 0
 
-def format_shopping_list(list_id, name, items_json, date):
-    items = json.loads(items_json)
-    message = f"🛒 *{name}*\n📅 {date}\n\n"
+def format_all_shopping_lists(user_id):
+    """Форматирует ВСЕ списки покупок в ОДНОМ сообщении"""
+    lists = get_shopping_lists(user_id)
+    if not lists:
+        return None, None
     
-    keyboard = telebot.types.InlineKeyboardMarkup(row_width=1)
+    message = "🛒 *Все списки покупок*\n\n"
+    keyboard = telebot.types.InlineKeyboardMarkup(row_width=2)
     
-    for i, item in enumerate(items):
-        status = "✅" if item["checked"] else "⬜"
-        message += f"{status} {item['name']}\n"
-        btn_text = "✔️ Куплено" if not item["checked"] else "🔄 Вернуть"
+    for list_id, name, items_json, date in lists:
+        items = json.loads(items_json)
+        checked_count = sum(1 for i in items if i["checked"])
+        total_count = len(items)
+        
+        # Заголовок списка
+        status_icon = "✅" if checked_count == total_count and total_count > 0 else "🔄"
+        message += f"{status_icon} *{name}*\n📅 {date}\n"
+        
+        # Пункты списка с галочками слева
+        for i, item in enumerate(items):
+            check = "✅" if item["checked"] else "⬜"
+            message += f"{check} {item['name']}\n"
+            # Кнопка с дублированием названия
+            btn_text = f"{'🔄' if item['checked'] else '✅'} {item['name']}"
+            keyboard.add(telebot.types.InlineKeyboardButton(
+                btn_text, callback_data=f"shop_toggle_{list_id}_{i}"
+            ))
+        
+        message += f"\n📊 {checked_count}/{total_count} куплено\n"
+        message += "─" * 20 + "\n"
+        
+        # Кнопка удаления списка
         keyboard.add(telebot.types.InlineKeyboardButton(
-            btn_text, callback_data=f"shop_toggle_{list_id}_{i}"
+            f"🗑 Удалить список: {name}", callback_data=f"shop_del_{list_id}"
         ))
-    
-    message += f"\n📊 {sum(1 for i in items if i['checked'])} из {len(items)} куплено"
-    keyboard.add(telebot.types.InlineKeyboardButton("🗑 Удалить список", callback_data=f"shop_del_{list_id}"))
+        keyboard.row()  # новая строка
     
     return message, keyboard
-
-def show_shopping_lists(message):
-    """Показывает списки покупок (вызывается из bot.py для команд и меню)"""
-    lists = get_shopping_lists(message.chat.id)
-    if not lists:
-        # Импортируем bot глобально или используем переданный
-        from bot import bot
-        bot.reply_to(message, "🛒 Нет списков покупок.\nСоздайте: *купить: хлеб, молоко*", parse_mode='Markdown')
-        return
-    
-    from bot import bot
-    for list_id, name, items, date in lists:
-        msg, keyboard = format_shopping_list(list_id, name, items, date)
-        bot.send_message(message.chat.id, msg, parse_mode='Markdown', reply_markup=keyboard)
 
 def register_handlers(bot):
     
     @bot.message_handler(commands=['shopping', 'покупки'])
     def show_shopping_lists_command(message):
-        """Показывает списки покупок по команде"""
-        lists = get_shopping_lists(message.chat.id)
-        if not lists:
+        msg, keyboard = format_all_shopping_lists(message.chat.id)
+        if msg is None:
             bot.reply_to(message, "🛒 Нет списков покупок.\nСоздайте: *купить: хлеб, молоко*", parse_mode='Markdown')
             return
-        
-        for list_id, name, items, date in lists:
-            msg, keyboard = format_shopping_list(list_id, name, items, date)
-            bot.send_message(message.chat.id, msg, parse_mode='Markdown', reply_markup=keyboard)
+        bot.send_message(message.chat.id, msg, parse_mode='Markdown', reply_markup=keyboard)
     
     @bot.callback_query_handler(func=lambda call: call.data.startswith('shop_toggle_'))
     def handle_toggle(call):
@@ -101,6 +103,9 @@ def register_handlers(bot):
         list_id = int(parts[2])
         item_index = int(parts[3])
         
+        update_shopping_item(list_id, call.message.chat.id, item_index, None)
+        
+        # Получаем текущий статус и переключаем
         conn, cursor = get_connection()
         cursor.execute('SELECT items FROM shopping_lists WHERE id = ? AND user_id = ?', 
                       (list_id, call.message.chat.id))
@@ -111,10 +116,9 @@ def register_handlers(bot):
                 new_status = not items[item_index]["checked"]
                 update_shopping_item(list_id, call.message.chat.id, item_index, new_status)
                 
-                cursor.execute('SELECT name, items, date FROM shopping_lists WHERE id = ?', (list_id,))
-                new_row = cursor.fetchone()
-                if new_row:
-                    msg, keyboard = format_shopping_list(list_id, new_row[0], new_row[1], new_row[2])
+                # Обновляем всё сообщение
+                msg, keyboard = format_all_shopping_lists(call.message.chat.id)
+                if msg:
                     bot.edit_message_text(msg, call.message.chat.id, call.message.message_id,
                                          parse_mode='Markdown', reply_markup=keyboard)
                     bot.answer_callback_query(call.id, "✅ Статус обновлён")
@@ -123,5 +127,12 @@ def register_handlers(bot):
     def handle_delete_list(call):
         list_id = int(call.data.split('_')[2])
         if delete_shopping_list(list_id, call.message.chat.id):
+            # Обновляем сообщение
+            msg, keyboard = format_all_shopping_lists(call.message.chat.id)
+            if msg:
+                bot.edit_message_text(msg, call.message.chat.id, call.message.message_id,
+                                     parse_mode='Markdown', reply_markup=keyboard)
+            else:
+                bot.edit_message_text("🛒 Все списки покупок удалены", 
+                                     call.message.chat.id, call.message.message_id)
             bot.answer_callback_query(call.id, "🗑 Список удалён!")
-            bot.delete_message(call.message.chat.id, call.message.message_id)
