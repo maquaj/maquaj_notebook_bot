@@ -233,3 +233,49 @@ if __name__ == "__main__":
     print("🇬🇧 Английские команды:")
     print("/list, /shopping, /birthdays, /reminders, /todo, /help")
     bot.infinity_polling()
+
+@bot.message_handler(func=lambda m: m.text and m.text.lower() == 'меню')
+def show_menu(message):
+    keyboard = telebot.types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
+    
+    buttons = [
+        "📝 Список дел",
+        "🛒 Покупки", 
+        "🎂 Дни рождения",
+        "⏰ Напоминания",
+        "📋 Задачи",
+        "❌ Закрыть меню"
+    ]
+    
+    keyboard.add(*buttons)
+    
+    bot.reply_to(message, 
+                 "📱 *Главное меню*\n\n"
+                 "Выберите нужный раздел:",
+                 parse_mode='Markdown',
+                 reply_markup=keyboard)
+
+@bot.message_handler(func=lambda m: m.text and m.text == '❌ Закрыть меню')
+def close_menu(message):
+    remove_keyboard = telebot.types.ReplyKeyboardRemove()
+    bot.reply_to(message, "🔒 Меню закрыто", reply_markup=remove_keyboard)
+
+@bot.message_handler(func=lambda m: m.text and m.text == '📝 Список дел')
+def menu_notes(message):
+    notes.show_notes(message)
+
+@bot.message_handler(func=lambda m: m.text and m.text == '🛒 Покупки')
+def menu_shopping(message):
+    shopping.show_shopping_lists(message)
+
+@bot.message_handler(func=lambda m: m.text and m.text == '🎂 Дни рождения')
+def menu_birthdays(message):
+    birthdays.show_birthdays(message)
+
+@bot.message_handler(func=lambda m: m.text and m.text == '⏰ Напоминания')
+def menu_reminders(message):
+    reminders.show_reminders(message)
+
+@bot.message_handler(func=lambda m: m.text and m.text == '📋 Задачи')
+def menu_todo(message):
+    todo.show_todo(message)
