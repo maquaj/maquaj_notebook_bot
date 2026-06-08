@@ -63,8 +63,30 @@ def init_db():
             date TEXT
         )
     ''')
+
+    # Проверяем и добавляем колонку attempts в reminders (для старых баз)
+    cursor.execute("PRAGMA table_info(reminders)")
+    columns = [col[1] for col in cursor.fetchall()]
+    if 'attempts' not in columns:
+        cursor.execute('ALTER TABLE reminders ADD COLUMN attempts INTEGER DEFAULT 0')
+        print("✅ Добавлена колонка attempts в таблицу reminders")
     
     conn.commit()
+    print("✅ База данных инициализирована, все таблицы готовы")
 
 def get_connection():
+    """Возвращает соединение и курсор для работы с БД"""
+    global conn, cursor
+    if conn is None:
+        init_db()
     return conn, cursor
+
+def close_connection():
+    """Закрывает соединение с БД"""
+    global conn, cursor
+    if conn:
+        conn.close()
+        conn = None
+        cursor = None
+        print("🔌 Соединение с БД закрыто")
+        
