@@ -69,22 +69,28 @@ def get_today_birthdays():
     cursor.execute('SELECT user_id, name, date_text, year FROM birthdays WHERE day = ? AND month = ?', (today.day, today.month))
     return cursor.fetchall()
 
+def get_birthdays_list(user_id):
+    """Возвращает отформатированный список дней рождений и клавиатуру"""
+    birthdays = get_birthdays(user_id)
+    if not birthdays:
+        return "🎂 Нет сохранённых дней рождения.\nДобавьте: *др Анна 15.03*", None
+    
+    msg = "🎂 *Сохранённые дни рождения:*\n\n"
+    keyboard = telebot.types.InlineKeyboardMarkup()
+    
+    for bday_id, name, day, month, year, date_text in birthdays:
+        year_text = f" ({year} г.)" if year else ""
+        msg += f"• *{name}* — {date_text}{year_text}\n"
+        keyboard.add(telebot.types.InlineKeyboardButton(f"❌ {name}", callback_data=f"bday_del_{bday_id}"))
+    
+    return msg, keyboard
+
 def register_handlers(bot):
-    @bot.message_handler(commands=['birthdays'])
-    def show_birthdays(message):
-        birthdays = get_birthdays(message.chat.id)
-        if not birthdays:
-            bot.reply_to(message, "🎂 Нет сохранённых дней рождения.\nДобавьте: *др Анна 15.03*", parse_mode='Markdown')
-            return
-        
-        msg = "🎂 *Сохранённые дни рождения:*\n\n"
-        keyboard = telebot.types.InlineKeyboardMarkup()
-        
-        for bday_id, name, day, month, year, date_text in birthdays:
-            year_text = f" ({year} г.)" if year else ""
-            msg += f"• *{name}* — {date_text}{year_text}\n"
-            keyboard.add(telebot.types.InlineKeyboardButton(f"❌ {name}", callback_data=f"bday_del_{bday_id}"))
-        
+    
+    @bot.message_handler(commands=['birthdays', 'др'])
+    def show_birthdays_command(message):
+        """Показывает дни рождения по команде"""
+        msg, keyboard = get_birthdays_list(message.chat.id)
         bot.send_message(message.chat.id, msg, parse_mode='Markdown', reply_markup=keyboard)
     
     @bot.callback_query_handler(func=lambda call: call.data.startswith('bday_del_'))
@@ -95,13 +101,11 @@ def register_handlers(bot):
             bot.delete_message(call.message.chat.id, call.message.message_id)
 
 def start_birthday_checker(bot):
-    """Фоновый поток для проверки ДР раз в день в 9:00"""
     def checker():
         last_date = None
         while True:
             try:
                 now = datetime.now()
-                # Проверяем раз в минуту, но отправляем только в 9:00
                 if now.hour == 9 and now.minute == 0 and last_date != now.date():
                     birthdays = get_today_birthdays()
                     for user_id, name, date_text, year in birthdays:
@@ -114,8 +118,8 @@ def start_birthday_checker(bot):
                                 f"📅 {date_text}\n\n"
                                 f"Не забудьте поздравить! 🎁",
                                 parse_mode='Markdown')
-                        except:
-                            pass
+                        except Exception as e:
+                            print(f"Ошибка отправки ДР: {e}")
                     last_date = now.date()
             except Exception as e:
                 print(f"Ошибка в birthday checker: {e}")
