@@ -2,7 +2,7 @@ import telebot
 from database import get_connection
 from datetime import datetime
 
-# Временное хранилище для ожидания ввода задачи (будет заполняться из bot.py)
+# Временное хранилище для ожидания ввода задачи
 waiting_for_task = {}
 
 def set_waiting_for_task(user_id):
@@ -33,7 +33,7 @@ def add_task(user_id, task):
     return cursor.lastrowid
 
 def get_all_tasks(user_id):
-    """Получает все задачи пользователя"""
+    """Получает все задачи пользователя (сначала невыполненные, потом выполненные)"""
     conn, cursor = get_connection()
     cursor.execute('''
         SELECT id, task, is_done, date 
@@ -71,7 +71,7 @@ def delete_all_done_tasks(user_id):
     return cursor.rowcount
 
 def format_todo_list(tasks):
-    """Форматирует список задач в одно сообщение с кнопками"""
+    """Форматирует список задач в одно сообщение с кнопками (с названиями задач)"""
     if not tasks:
         return "📭 *Нет задач*\n\nДобавьте: `сделать купить хлеб` или через `/todo`", None
     
@@ -109,10 +109,19 @@ def format_todo_list(tasks):
     
     return message, keyboard
 
+def show_todo(message):
+    """Показывает список задач (вызывается из bot.py)"""
+    tasks = get_all_tasks(message.chat.id)
+    msg, keyboard = format_todo_list(tasks)
+    
+    # Глобальный bot нужно передать или использовать импорт
+    from bot import bot
+    bot.send_message(message.chat.id, msg, parse_mode='Markdown', reply_markup=keyboard)
+
 def register_handlers(bot):
     
-    @bot.message_handler(commands=['todo'])
-    def show_todo(message):
+    @bot.message_handler(commands=['todo', 'задачи'])
+    def show_todo_command(message):
         """Показывает список задач"""
         tasks = get_all_tasks(message.chat.id)
         msg, keyboard = format_todo_list(tasks)
