@@ -28,7 +28,6 @@ def get_shopping_lists(user_id):
     return result if result else []
 
 def update_shopping_item(list_id, user_id, item_index, checked):
-    # Сначала получаем текущий список
     select_query = 'SELECT items FROM shopping_lists WHERE id = %s AND user_id = %s'
     row = execute_query(select_query, (list_id, user_id), fetch_one=True)
     
@@ -47,34 +46,39 @@ def delete_shopping_list(list_id, user_id):
     return True
 
 def format_all_shopping_lists(user_id):
+    """Форматирует ВСЕ списки покупок в ОДНОМ сообщении (упрощённо)"""
     lists = get_shopping_lists(user_id)
     if not lists:
         return None, None
     
-    message = "🛒 *Все списки покупок*\n\n"
-    keyboard = telebot.types.InlineKeyboardMarkup(row_width=2)
+    message = "🛒 *Мои покупки*\n\n"
+    keyboard = telebot.types.InlineKeyboardMarkup(row_width=1)
     
     for list_id, name, items_json, date in lists:
         items = json.loads(items_json)
         checked_count = sum(1 for i in items if i["checked"])
         total_count = len(items)
         
-        status_icon = "✅" if checked_count == total_count and total_count > 0 else "🔄"
-        message += f"{status_icon} *{name}*\n📅 {date}\n"
+        # Заголовок списка (только название)
+        message += f"📋 *{name}*\n"
         
+        # Пункты списка с галочками
         for i, item in enumerate(items):
             check = "✅" if item["checked"] else "⬜"
             message += f"{check} {item['name']}\n"
+            # Кнопка с дублированием названия
             btn_text = f"{'🔄' if item['checked'] else '✅'} {item['name']}"
             keyboard.add(telebot.types.InlineKeyboardButton(
                 btn_text, callback_data=f"shop_toggle_{list_id}_{i}"
             ))
         
-        message += f"\n📊 {checked_count}/{total_count} куплено\n"
-        message += "─" * 20 + "\n"
+        # Статистика и дата (компактно)
+        message += f"📊 {checked_count}/{total_count}\n"
+        message += "─" * 15 + "\n"
         
+        # Кнопка удаления списка
         keyboard.add(telebot.types.InlineKeyboardButton(
-            f"🗑 Удалить список: {name}", callback_data=f"shop_del_{list_id}"
+            f"🗑 Удалить \"{name}\"", callback_data=f"shop_del_{list_id}"
         ))
         keyboard.row()
     
@@ -96,7 +100,6 @@ def register_handlers(bot):
         list_id = int(parts[2])
         item_index = int(parts[3])
         
-        # Получаем текущий статус и переключаем
         select_query = 'SELECT items FROM shopping_lists WHERE id = %s AND user_id = %s'
         row = execute_query(select_query, (list_id, call.message.chat.id), fetch_one=True)
         
