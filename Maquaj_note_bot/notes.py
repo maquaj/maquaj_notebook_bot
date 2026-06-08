@@ -1,41 +1,27 @@
 import telebot
-from database import get_connection
+from database import execute_query, get_connection
 from datetime import datetime
-
-# Глобальная переменная для бота (устанавливается из bot.py)
-bot = None
-
-def set_bot(bot_instance):
-    """Устанавливает экземпляр бота для отправки сообщений"""
-    global bot
-    bot = bot_instance
 
 def get_cursor():
     conn, cursor = get_connection()
     return conn, cursor
 
 def add_note(user_id, text):
-    """Добавляет новую заметку"""
-    conn, cursor = get_connection()
-    cursor.execute('INSERT INTO notes (user_id, text, date) VALUES (?, ?, ?)',
-                   (user_id, text, datetime.now().strftime("%Y-%m-%d %H:%M")))
-    conn.commit()
+    query = 'INSERT INTO notes (user_id, text, date) VALUES (%s, %s, %s)'
+    execute_query(query, (user_id, text, datetime.now().strftime("%Y-%m-%d %H:%M")))
 
 def get_notes(user_id):
-    """Получает все заметки пользователя"""
-    conn, cursor = get_connection()
-    cursor.execute('SELECT id, text, date FROM notes WHERE user_id = ? ORDER BY id DESC', (user_id,))
-    return cursor.fetchall()
+    query = 'SELECT id, text, date FROM notes WHERE user_id = %s ORDER BY id DESC'
+    result = execute_query(query, (user_id,), fetch_all=True)
+    return result if result else []
 
 def delete_note(note_id, user_id):
-    """Удаляет заметку по ID"""
-    conn, cursor = get_connection()
-    cursor.execute('DELETE FROM notes WHERE id = ? AND user_id = ?', (note_id, user_id))
-    conn.commit()
-    return cursor.rowcount > 0
+    query = 'DELETE FROM notes WHERE id = %s AND user_id = %s'
+    execute_query(query, (note_id, user_id))
+    return True
 
 def show_notes(message):
-    """Показывает заметки (вызывается из bot.py для команд /list и /список)"""
+    from bot import bot
     notes_list = get_notes(message.chat.id)
     if not notes_list:
         bot.reply_to(message, "📭 Нет заметок")
@@ -47,10 +33,7 @@ def show_notes(message):
         bot.send_message(message.chat.id, f"📌 *{date}*\n{text}", 
                         parse_mode='Markdown', reply_markup=keyboard)
 
-def register_handlers(bot_instance):
-    """Регистрирует обработчики команд и кнопок для заметок"""
-    global bot
-    bot = bot_instance
+def register_handlers(bot):
     
     @bot.message_handler(commands=['list', 'список'])
     def list_command(message):
@@ -64,3 +47,5 @@ def register_handlers(bot_instance):
             bot.delete_message(call.message.chat.id, call.message.message_id)
         else:
             bot.answer_callback_query(call.id, "❌ Ошибка при удалении")
+
+print("📦 Модуль notes.py загружен")
