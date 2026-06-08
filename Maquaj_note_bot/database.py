@@ -8,7 +8,7 @@ def init_db():
     conn = sqlite3.connect('pamyat.db', check_same_thread=False)
     cursor = conn.cursor()
     
-    # Заметки
+    # Таблица для обычных заметок
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS notes (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -18,7 +18,7 @@ def init_db():
         )
     ''')
     
-    # Списки покупок
+    # Таблица для списков покупок
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS shopping_lists (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -29,7 +29,7 @@ def init_db():
         )
     ''')
     
-    # Дни рождения
+    # Таблица для дней рождений
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS birthdays (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -42,18 +42,19 @@ def init_db():
         )
     ''')
     
-    # Напоминания (новая таблица)
+    # Таблица для напоминаний (с поддержкой attempts)
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS reminders (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id INTEGER,
             text TEXT,
-            remind_time TEXT,  -- ISO формат "2026-06-15 15:00:00"
-            is_sent INTEGER DEFAULT 0
+            remind_time TEXT,
+            is_sent INTEGER DEFAULT 0,
+            attempts INTEGER DEFAULT 0
         )
     ''')
-
-        # Список задач (Todo)
+    
+    # Таблица для задач (Todo)
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS todos (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -63,7 +64,7 @@ def init_db():
             date TEXT
         )
     ''')
-
+    
     # Проверяем и добавляем колонку attempts в reminders (для старых баз)
     cursor.execute("PRAGMA table_info(reminders)")
     columns = [col[1] for col in cursor.fetchall()]
@@ -89,4 +90,3 @@ def close_connection():
         conn = None
         cursor = None
         print("🔌 Соединение с БД закрыто")
-        
