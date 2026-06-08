@@ -10,16 +10,15 @@ def get_cursor():
     return conn, cursor
 
 def add_reminder(user_id, text, remind_time):
-    print(f"📝 Добавление напоминания: '{text}' на {remind_time}")
     query = '''
         INSERT INTO reminders (user_id, text, remind_time, is_sent, attempts)
         VALUES (%s, %s, %s, 0, 0)
         RETURNING id
     '''
-    result = execute_query(query, (user_id, text, remind_time.isoformat()), fetch_one=True)
-    reminder_id = result[0] if result else None
-    print(f"✅ Напоминание #{reminder_id} добавлено")
-    return reminder_id
+    # Убедитесь, что remind_time в правильном формате
+    formatted_time = remind_time.strftime("%Y-%m-%d %H:%M:%S")
+    result = execute_query(query, (user_id, text, formatted_time), fetch_one=True)
+    return result[0] if result else None
 
 def get_pending_reminders():
     now = datetime.now().isoformat()
