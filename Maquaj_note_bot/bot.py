@@ -24,8 +24,55 @@ todo.register_handlers(bot)
 reminders.start_reminder_checker(bot)
 birthdays.start_birthday_checker(bot)
 
+# ========== КНОПОЧНОЕ МЕНЮ ==========
+
+@bot.message_handler(func=lambda m: m.text and m.text.lower() == 'меню')
+def show_menu(message):
+    keyboard = telebot.types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
+    
+    buttons = [
+        "📝 Список дел",
+        "🛒 Покупки", 
+        "🎂 Дни рождения",
+        "⏰ Напоминания",
+        "📋 Задачи",
+        "❌ Закрыть меню"
+    ]
+    
+    keyboard.add(*buttons)
+    
+    bot.reply_to(message, 
+                 "📱 *Главное меню*\n\n"
+                 "Выберите нужный раздел:",
+                 parse_mode='Markdown',
+                 reply_markup=keyboard)
+
+@bot.message_handler(func=lambda m: m.text and m.text == '❌ Закрыть меню')
+def close_menu(message):
+    remove_keyboard = telebot.types.ReplyKeyboardRemove()
+    bot.reply_to(message, "🔒 Меню закрыто", reply_markup=remove_keyboard)
+
+@bot.message_handler(func=lambda m: m.text and m.text == '📝 Список дел')
+def menu_notes(message):
+    notes.show_notes(message)
+
+@bot.message_handler(func=lambda m: m.text and m.text == '🛒 Покупки')
+def menu_shopping(message):
+    shopping.show_shopping_lists(message)
+
+@bot.message_handler(func=lambda m: m.text and m.text == '🎂 Дни рождения')
+def menu_birthdays(message):
+    birthdays.show_birthdays(message)
+
+@bot.message_handler(func=lambda m: m.text and m.text == '⏰ Напоминания')
+def menu_reminders(message):
+    reminders.show_reminders(message)
+
+@bot.message_handler(func=lambda m: m.text and m.text == '📋 Задачи')
+def menu_todo(message):
+    todo.show_todo(message)
+
 # ========== ГЛАВНЫЙ ОБРАБОТЧИК ==========
-# Команда /start (уже есть, оставляем)
 @bot.message_handler(commands=['start'])
 def send_welcome(message):
     bot.reply_to(message, 
@@ -34,55 +81,33 @@ def send_welcome(message):
                  "🛒 *купить: хлеб, молоко* — список покупок\n"
                  "🎂 *др Анна 15.03* — день рождения\n"
                  "⏰ *напомни купить хлеб завтра в 15:00* — напоминание\n"
-                 "📋 *сделать задача* или `/todo` — список задач\n\n"
-                 "🇬🇧 *Команды:*\n"
-                 "/list или /список — заметки\n"
-                 "/shopping или /покупки — списки покупок\n"
-                 "/birthdays или /др — дни рождения\n"
-                 "/reminders или /напомнить — напоминания\n"
-                 "/todo или /задачи — список задач\n"
-                 "/check или /проверка — отладка",
+                 "📋 *сделать задача* или `/todo` — список задач\n"
+                 "📱 *меню* — открыть главное меню\n\n"
+                 "/list — заметки\n"
+                 "/shopping — списки покупок\n"
+                 "/birthdays — дни рождения\n"
+                 "/reminders — напоминания\n"
+                 "/todo — задачи\n"
+                 "/help — помощь",
                  parse_mode='Markdown')
 
-# ========== КОМАНДЫ С РУССКИМИ АЛЬТЕРНАТИВАМИ ==========
-
-# /list и /список
-@bot.message_handler(commands=['list', 'список'])
-def show_notes_command(message):
-    notes.show_notes(message)
-
-# /shopping и /покупки
-@bot.message_handler(commands=['shopping', 'покупки'])
-def show_shopping_command(message):
-    shopping.show_shopping_lists(message)
-
-# /birthdays и /др
-@bot.message_handler(commands=['birthdays', 'др'])
-def show_birthdays_command(message):
-    birthdays.show_birthdays(message)
-
-# /reminders и /напомнить
-@bot.message_handler(commands=['reminders', 'напомнить'])
-def show_reminders_command(message):
-    reminders.show_reminders(message)
-
-# /todo и /задачи
-@bot.message_handler(commands=['todo', 'задачи'])
-def show_todo_command(message):
-    todo.show_todo(message)
-
-# /check и /проверка
-@bot.message_handler(commands=['check', 'проверка'])
-def check_reminders_command(message):
-    pending = reminders.get_pending_reminders()
-    if pending:
-        bot.reply_to(message, f"📋 Найдено {len(pending)} ожидающих напоминаний.")
-        for rem_id, user_id, text, remind_time in pending:
-            dt = datetime.fromisoformat(remind_time)
-            bot.send_message(message.chat.id, f"⏰ *Ожидает:* {text} (на {dt.strftime('%d.%m.%Y %H:%M')})",
-                           parse_mode='Markdown')
-    else:
-        bot.reply_to(message, "📭 Нет ожидающих напоминаний")
+# Команда помощи
+@bot.message_handler(commands=['help', 'помощь'])
+def show_help(message):
+    bot.reply_to(message,
+                 "📚 *Помощь по командам*\n\n"
+                 "📝 *Заметки:* просто отправьте текст\n"
+                 "🛒 *Покупки:* `купить: хлеб, молоко`\n"
+                 "🎂 *Дни рождения:* `др Анна 15.03`\n"
+                 "⏰ *Напоминания:* `напомни ... завтра в 15:00`\n"
+                 "📋 *Задачи:* `сделать задача`\n"
+                 "📱 *Меню:* напишите `меню`\n\n"
+                 "/list или /список — заметки\n"
+                 "/shopping или /покупки — покупки\n"
+                 "/birthdays или /др — дни рождения\n"
+                 "/reminders или /напомнить — напоминания\n"
+                 "/todo или /задачи — задачи",
+                 parse_mode='Markdown')
 
 @bot.message_handler(content_types=['text'])
 def handle_all_messages(message):
@@ -194,32 +219,6 @@ def handle_task_input(message):
         bot.reply_to(message, "❌ Задача не может быть пустой")
     todo.clear_waiting_for_task(message.chat.id)
 
-# ========== ДОПОЛНИТЕЛЬНЫЕ КОМАНДЫ ==========
-
-# Команда помощи (на русском)
-@bot.message_handler(commands=['help', 'помощь'])
-def show_help(message):
-    bot.reply_to(message,
-                 "📚 *Помощь по командам*\n\n"
-                 "🎂 *Дни рождения:*\n"
-                 "`др Анна 15.03` — добавить\n"
-                 "`/др` или `/birthdays` — список\n\n"
-                 "🛒 *Покупки:*\n"
-                 "`купить: хлеб, молоко` — добавить\n"
-                 "`/покупки` или `/shopping` — список\n\n"
-                 "⏰ *Напоминания:*\n"
-                 "`напомни ... завтра в 15:00` — добавить\n"
-                 "`/напомнить` или `/reminders` — список\n\n"
-                 "📋 *Задачи:*\n"
-                 "`сделать купить хлеб` — добавить\n"
-                 "`/задачи` или `/todo` — список\n\n"
-                 "📝 *Заметки:*\n"
-                 "`Просто текст` — добавить\n"
-                 "`/список` или `/list` — посмотреть\n\n"
-                 "🔍 *Отладка:*\n"
-                 "`/проверка` или `/check` — проверить напоминания",
-                 parse_mode='Markdown')
-
 # ========== ЗАПУСК ==========
 if __name__ == "__main__":
     print("🤖 Бот «Вторая память» запущен!")
@@ -227,55 +226,4 @@ if __name__ == "__main__":
     print("🎂 др Анна 15.03")
     print("⏰ напомни купить хлеб завтра в 15:00")
     print("📋 сделать задача")
-    print("📝 Просто текст — заметка")
-    print("\n🇷🇺 Русские команды:")
-    print("/список, /покупки, /др, /напомнить, /задачи, /помощь")
-    print("🇬🇧 Английские команды:")
-    print("/list, /shopping, /birthdays, /reminders, /todo, /help")
-    bot.infinity_polling()
-
-@bot.message_handler(func=lambda m: m.text and m.text.lower() == 'меню')
-def show_menu(message):
-    keyboard = telebot.types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
-    
-    buttons = [
-        "📝 Список дел",
-        "🛒 Покупки", 
-        "🎂 Дни рождения",
-        "⏰ Напоминания",
-        "📋 Задачи",
-        "❌ Закрыть меню"
-    ]
-    
-    keyboard.add(*buttons)
-    
-    bot.reply_to(message, 
-                 "📱 *Главное меню*\n\n"
-                 "Выберите нужный раздел:",
-                 parse_mode='Markdown',
-                 reply_markup=keyboard)
-
-@bot.message_handler(func=lambda m: m.text and m.text == '❌ Закрыть меню')
-def close_menu(message):
-    remove_keyboard = telebot.types.ReplyKeyboardRemove()
-    bot.reply_to(message, "🔒 Меню закрыто", reply_markup=remove_keyboard)
-
-@bot.message_handler(func=lambda m: m.text and m.text == '📝 Список дел')
-def menu_notes(message):
-    notes.show_notes(message)
-
-@bot.message_handler(func=lambda m: m.text and m.text == '🛒 Покупки')
-def menu_shopping(message):
-    shopping.show_shopping_lists(message)
-
-@bot.message_handler(func=lambda m: m.text and m.text == '🎂 Дни рождения')
-def menu_birthdays(message):
-    birthdays.show_birthdays(message)
-
-@bot.message_handler(func=lambda m: m.text and m.text == '⏰ Напоминания')
-def menu_reminders(message):
-    reminders.show_reminders(message)
-
-@bot.message_handler(func=lambda m: m.text and m.text == '📋 Задачи')
-def menu_todo(message):
-    todo.show_todo(message)
+    print("📱 меню — открыть меню")
