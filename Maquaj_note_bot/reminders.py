@@ -16,7 +16,9 @@ def add_reminder(user_id, text, remind_time):
         VALUES (?, ?, ?, 0, 0)
     ''', (user_id, text, remind_time.isoformat()))
     conn.commit()
-    return cursor.lastrowid
+    reminder_id = cursor.lastrowid
+    print(f"📝 Добавлено напоминание #{reminder_id}: '{text}' на {remind_time.strftime('%d.%m.%Y %H:%M')}")
+    return reminder_id
 
 def get_pending_reminders():
     conn, cursor = get_connection()
@@ -26,7 +28,10 @@ def get_pending_reminders():
         FROM reminders 
         WHERE is_sent = 0 AND remind_time <= ? AND attempts < 3
     ''', (now,))
-    return cursor.fetchall()
+    results = cursor.fetchall()
+    if results:
+        print(f"🔍 Найдено {len(results)} напоминаний для отправки")
+    return results
 
 def increment_attempt(reminder_id):
     conn, cursor = get_connection()
@@ -46,6 +51,7 @@ def reschedule_failed_reminder(reminder_id):
         WHERE id = ?
     ''', (reminder_id,))
     conn.commit()
+    print(f"⏰ Напоминание #{reminder_id} перенесено на +10 минут")
 
 def delete_reminder(reminder_id, user_id):
     conn, cursor = get_connection()
@@ -68,7 +74,6 @@ def format_reminder_time(reminder_time):
     return dt.strftime("%d.%m.%Y в %H:%M")
 
 def get_reminders_list(user_id):
-    """Возвращает отформатированный список напоминаний и клавиатуру"""
     reminders = get_all_future_reminders(user_id)
     if not reminders:
         return "⏰ Нет активных напоминаний.\nСоздайте: *напомни купить хлеб завтра в 15:00*", None
@@ -89,7 +94,6 @@ def register_handlers(bot):
     
     @bot.message_handler(commands=['reminders', 'напомнить'])
     def show_reminders_command(message):
-        """Показывает напоминания по команде"""
         msg, keyboard = get_reminders_list(message.chat.id)
         bot.send_message(message.chat.id, msg, parse_mode='Markdown', reply_markup=keyboard)
     
@@ -118,18 +122,28 @@ def register_handlers(bot):
         bot.answer_callback_query(call.id, "👍 Отлично!")
 
 def start_reminder_checker(bot):
+    print("⏰ Инициализация потока напоминаний...")
+    
     def checker():
-        print("⏰ Поток напоминаний запущен")
+        print("⏰ Поток напоминаний запущен и работает")
+        last_debug = time.time()
+        
         while True:
             try:
+                # Каждые 30 секунд выводим статус (для отладки)
+                if time.time() - last_debug > 30:
+                    print("⏰ Поток напоминаний активен, проверяю...")
+                    last_debug = time.time()
+                
                 reminders = get_pending_reminders()
                 if reminders:
-                    print(f"📋 Найдено {len(reminders)} напоминаний")
+                    print(f"📋 Найдено {len(reminders)} напоминаний для отправки")
                 
                 for rem_id, user_id, text, remind_time, attempts in reminders:
                     try:
                         dt = datetime.fromisoformat(remind_time)
                         time_str = dt.strftime("%d.%m.%Y в %H:%M")
+                        print(f"🔔 Отправка напоминания #{rem_id} пользователю {user_id}: '{text}' на {time_str}")
                         
                         keyboard = telebot.types.InlineKeyboardMarkup()
                         keyboard.add(telebot.types.InlineKeyboardButton(
@@ -144,20 +158,23 @@ def start_reminder_checker(bot):
                             reply_markup=keyboard)
                         
                         mark_reminder_sent(rem_id)
-                        print(f"✅ Напоминание {rem_id} отправлено")
+                        print(f"✅ Напоминание #{rem_id} отправлено и помечено как отправленное")
                         
                     except Exception as e:
-                        print(f"❌ Ошибка отправки {rem_id}, попытка {attempts+1}/3: {e}")
+                        print(f"❌ Ошибка отправки #{rem_id}, попытка {attempts+1}/3: {e}")
                         increment_attempt(rem_id)
                         
                         if attempts + 1 >= 3:
                             reschedule_failed_reminder(rem_id)
-                            print(f"⏰ Напоминание {rem_id} перенесено на +10 минут")
                             
             except Exception as e:
-                print(f"❌ Ошибка в checker: {e}")
+                print(f"❌ Критическая ошибка в checker: {e}")
+            
             time.sleep(30)
     
     thread = threading.Thread(target=checker, daemon=True)
     thread.start()
-    print("⏰ Поток напоминаний успешно запущен")
+    print("⏰ Поток напоминаний успешно запущен (daemon=True)")
+
+# Для отладки — проверка при импорте
+print("📦 Модуль reminders.py загружен")
