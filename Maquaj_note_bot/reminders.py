@@ -26,11 +26,11 @@ def add_reminder(user_id, text, remind_time):
     return result[0] if result else None
 
 def get_pending_reminders():
-    now = datetime.now().isoformat()
+    now = datetime.now(MOSCOW_TZ).isoformat()
     query = '''
         SELECT id, user_id, text, remind_time, attempts 
         FROM reminders 
-        WHERE is_sent = 0 AND remind_time <= %s AND attempts < 3
+        WHERE is_sent = 0 AND remind_time <= %s::timestamp AND attempts < 3
     '''
     result = execute_query(query, (now,), fetch_all=True)
     return result if result else []
