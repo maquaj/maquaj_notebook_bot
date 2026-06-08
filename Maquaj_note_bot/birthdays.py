@@ -1,5 +1,5 @@
 import telebot
-from database import get_connection
+from database import execute_query, get_connection
 from datetime import datetime
 import re
 import threading
@@ -43,34 +43,31 @@ def parse_birthday(text):
     return None
 
 def add_birthday(user_id, name, day, month, year=None):
-    conn, cursor = get_connection()
     date_text = f"{day:02d}.{month:02d}" + (f".{year}" if year else "")
-    cursor.execute('''
+    query = '''
         INSERT INTO birthdays (user_id, name, day, month, year, date_text)
-        VALUES (?, ?, ?, ?, ?, ?)
-    ''', (user_id, name, day, month, year, date_text))
-    conn.commit()
-    return cursor.lastrowid
+        VALUES (%s, %s, %s, %s, %s, %s)
+    '''
+    execute_query(query, (user_id, name, day, month, year, date_text))
+    return True
 
 def get_birthdays(user_id):
-    conn, cursor = get_connection()
-    cursor.execute('SELECT id, name, day, month, year, date_text FROM birthdays WHERE user_id = ? ORDER BY month, day', (user_id,))
-    return cursor.fetchall()
+    query = 'SELECT id, name, day, month, year, date_text FROM birthdays WHERE user_id = %s ORDER BY month, day'
+    result = execute_query(query, (user_id,), fetch_all=True)
+    return result if result else []
 
 def delete_birthday(bday_id, user_id):
-    conn, cursor = get_connection()
-    cursor.execute('DELETE FROM birthdays WHERE id = ? AND user_id = ?', (bday_id, user_id))
-    conn.commit()
-    return cursor.rowcount > 0
+    query = 'DELETE FROM birthdays WHERE id = %s AND user_id = %s'
+    execute_query(query, (bday_id, user_id))
+    return True
 
 def get_today_birthdays():
-    conn, cursor = get_connection()
     today = datetime.now()
-    cursor.execute('SELECT user_id, name, date_text, year FROM birthdays WHERE day = ? AND month = ?', (today.day, today.month))
-    return cursor.fetchall()
+    query = 'SELECT user_id, name, date_text, year FROM birthdays WHERE day = %s AND month = %s'
+    result = execute_query(query, (today.day, today.month), fetch_all=True)
+    return result if result else []
 
 def get_birthdays_list(user_id):
-    """Возвращает отформатированный список дней рождений и клавиатуру"""
     birthdays = get_birthdays(user_id)
     if not birthdays:
         return "🎂 Нет сохранённых дней рождения.\nДобавьте: *др Анна 15.03*", None
@@ -89,7 +86,6 @@ def register_handlers(bot):
     
     @bot.message_handler(commands=['birthdays', 'др'])
     def show_birthdays_command(message):
-        """Показывает дни рождения по команде"""
         msg, keyboard = get_birthdays_list(message.chat.id)
         bot.send_message(message.chat.id, msg, parse_mode='Markdown', reply_markup=keyboard)
     
@@ -127,3 +123,5 @@ def start_birthday_checker(bot):
     
     thread = threading.Thread(target=checker, daemon=True)
     thread.start()
+
+print("📦 Модуль birthdays.py загружен")
