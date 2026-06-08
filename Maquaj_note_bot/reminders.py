@@ -12,26 +12,48 @@ def get_cursor():
 def add_reminder(user_id, text, remind_time):
     conn, cursor = get_connection()
     cursor.execute('''
-        INSERT INTO reminders (user_id, text, remind_time, is_sent)
-        VALUES (?, ?, ?, 0)
+        INSERT INTO reminders (user_id, text, remind_time, is_sent, attempts)
+        VALUES (?, ?, ?, 0, 0)
     ''', (user_id, text, remind_time.isoformat()))
     conn.commit()
     return cursor.lastrowid
 
 def get_pending_reminders():
+    """Получает напоминания, которые нужно отправить (макс 3 попытки)"""
     conn, cursor = get_connection()
     now = datetime.now().isoformat()
     cursor.execute('''
-        SELECT id, user_id, text, remind_time 
+        SELECT id, user_id, text, remind_time, attempts 
         FROM reminders 
-        WHERE is_sent = 0 AND remind_time <= ?
+        WHERE is_sent = 0 AND remind_time <= ? AND attempts < 3
     ''', (now,))
     return cursor.fetchall()
+
+def increment_attempt(reminder_id):
+    conn, cursor = get_connection()
+    cursor.execute('UPDATE reminders SET attempts = attempts + 1 WHERE id = ?', (reminder_id,))
+    conn.commit()
 
 def mark_reminder_sent(reminder_id):
     conn, cursor = get_connection()
     cursor.execute('UPDATE reminders SET is_sent = 1 WHERE id = ?', (reminder_id,))
     conn.commit()
+
+def reschedule_failed_reminder(reminder_id):
+    """Переносит неудачное напоминание на +10 минут"""
+    conn, cursor = get_connection()
+    cursor.execute('''
+        UPDATE reminders 
+        SET remind_time = datetime(remind_time, '+10 minutes')
+        WHERE id = ?
+    ''', (reminder_id,))
+    conn.commit()
+
+def delete_reminder(reminder_id, user_id):
+    conn, cursor = get_connection()
+    cursor.execute('DELETE FROM reminders WHERE id = ? AND user_id = ?', (reminder_id, user_id))
+    conn.commit()
+    return cursor.rowcount > 0
 
 def get_all_future_reminders(user_id):
     conn, cursor = get_connection()
@@ -43,19 +65,12 @@ def get_all_future_reminders(user_id):
     ''', (user_id,))
     return cursor.fetchall()
 
-def delete_reminder(reminder_id, user_id):
-    conn, cursor = get_connection()
-    cursor.execute('DELETE FROM reminders WHERE id = ? AND user_id = ?', (reminder_id, user_id))
-    conn.commit()
-    return cursor.rowcount > 0
-
 def format_reminder_time(reminder_time):
     dt = datetime.fromisoformat(reminder_time)
     return dt.strftime("%d.%m.%Y в %H:%M")
 
 def register_handlers(bot):
-    
-    @bot.message_handler(commands=['reminders'])
+    @bot.message_handler(commands=['reminders', 'напомнить'])
     def show_reminders(message):
         reminders = get_all_future_reminders(message.chat.id)
         if not reminders:
@@ -76,19 +91,18 @@ def register_handlers(bot):
         bot.send_message(message.chat.id, msg, parse_mode='Markdown', reply_markup=keyboard)
 
 def start_reminder_checker(bot):
-    """Фоновый поток для проверки и отправки напоминаний"""
     def checker():
-        print("⏰ Поток напоминаний запущен и работает")
+        print("⏰ Поток напоминаний запущен")
         while True:
             try:
                 reminders = get_pending_reminders()
                 if reminders:
-                    print(f"📋 Найдено {len(reminders)} напоминаний для отправки")
-                for rem_id, user_id, text, remind_time in reminders:
+                    print(f"📋 Найдено {len(reminders)} напоминаний")
+                
+                for rem_id, user_id, text, remind_time, attempts in reminders:
                     try:
                         dt = datetime.fromisoformat(remind_time)
                         time_str = dt.strftime("%d.%m.%Y в %H:%M")
-                        print(f"🔔 Отправка: пользователю {user_id}, текст: {text}, время: {time_str}")
                         
                         keyboard = telebot.types.InlineKeyboardMarkup()
                         keyboard.add(telebot.types.InlineKeyboardButton(
@@ -102,9 +116,18 @@ def start_reminder_checker(bot):
                             parse_mode='Markdown',
                             reply_markup=keyboard)
                         
-                        print(f"✅ Напоминание {rem_id} отправлено, ожидает подтверждения")
+                        # Если отправка успешна - удаляем напоминание
+                        mark_reminder_sent(rem_id)
+                        print(f"✅ Напоминание {rem_id} отправлено")
+                        
                     except Exception as e:
-                        print(f"❌ Ошибка отправки напоминания {rem_id}: {e}")
+                        print(f"❌ Ошибка отправки {rem_id}, попытка {attempts+1}/3: {e}")
+                        increment_attempt(rem_id)
+                        
+                        if attempts + 1 >= 3:
+                            reschedule_failed_reminder(rem_id)
+                            print(f"⏰ Напоминание {rem_id} перенесено на +10 минут")
+                            
             except Exception as e:
                 print(f"❌ Ошибка в checker: {e}")
             time.sleep(30)
